@@ -1,0 +1,49 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.24.x'
+          channel: 'stable'
+
+      - name: Assemble & Build App
+        run: |
+          mkdir -p /tmp/flutter_app
+          cd /tmp/flutter_app
+          flutter create --org com.aieditor.capcut --project-name ai_editor .
+          
+          # Inject custom code and dependencies from repo
+          cp -rf $GITHUB_WORKSPACE/lib ./
+          cp -f $GITHUB_WORKSPACE/pubspec.yaml ./
+          
+          # Enable network & media storage permissions in AndroidManifest
+          MANIFEST="android/app/src/main/AndroidManifest.xml"
+          sed -i '/<application/i \    <uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>\n    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO"/>' $MANIFEST
+
+          flutter pub get
+          flutter build apk --release --no-tree-shake-icons
+          cp build/app/outputs/flutter-apk/app-release.apk $GITHUB_WORKSPACE/ai-editor-release.apk
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: CapCut-AI-Editor-APK
+          path: ai-editor-release.apk
